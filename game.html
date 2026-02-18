@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slowest Race Ever: Betting Edition</title>
+    <style>
+        :root {
+            --bg-color: #2c3e50;
+            --sidebar-bg: #34495e;
+            --accent: #f1c40f;
+            --text-color: #ecf0f1;
+            --win-color: #2ecc71;
+            --lose-color: #e74c3c;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Layout */
+        header {
+            text-align: center;
+            padding: 10px;
+            background: #22303f;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 10;
+        }
+        h1 { margin: 0; font-size: 1.5rem; text-transform: uppercase; letter-spacing: 2px; }
+        .subtitle { font-size: 0.8rem; color: #bdc3c7; }
+
+        .game-container {
+            display: flex;
+            flex: 1;
+            height: 100%;
+        }
+
+        /* Left Side: The Track */
+        .track-area {
+            flex: 3;
+            background: #27ae60;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            border-right: 5px solid #1e8449;
+            overflow: hidden;
+        }
+
+        .lane {
+            flex: 1;
+            border-bottom: 2px dashed rgba(255,255,255,0.2);
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .finish-line {
+            position: absolute;
+            right: 50px;
+            top: 0; bottom: 0;
+            width: 20px;
+            background-image: linear-gradient(45deg, #000 25%, transparent 25%), 
+                              linear-gradient(-45deg, #000 25%, transparent 25%), 
+                              linear-gradient(45deg, transparent 75%, #000 75%), 
+                              linear-gradient(-45deg, transparent 75%, #000 75%);
+            background-size: 10px 10px;
+            background-color: #fff;
+            z-index: 1;
+        }
+
+        /* Right Side: Betting Panel */
+        .sidebar {
+            flex: 1;
+            background: var(--sidebar-bg);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.3);
+            min-width: 250px;
+        }
+
+        .panel-box {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #465f75;
+        }
+
+        .wallet-display {
+            font-size: 1.5rem;
+            color: var(--win-color);
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .bet-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        select, input {
+            padding: 10px;
+            background: #2c3e50;
+            border: 1px solid #7f8c8d;
+            color: white;
+            font-family: inherit;
+            border-radius: 4px;
+        }
+
+        /* Buttons */
+        button {
+            padding: 15px;
+            font-size: 1.1rem;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: bold;
+            transition: transform 0.1s;
+            text-transform: uppercase;
+        }
+        
+        button:active { transform: scale(0.98); }
+        
+        #place-bet-btn {
+            background: var(--accent);
+            color: #2c3e50;
+        }
+        
+        #start-race-btn {
+            background: var(--lose-color);
+            color: white;
+            width: 100%;
+            margin-top: auto; /* Push to bottom */
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        #start-race-btn.ready {
+            opacity: 1;
+            cursor: pointer;
+            box-shadow: 0 5px 0 #c0392b;
+        }
+
+        /* Racers */
+        .racer {
+            font-size: 3rem;
+            position: absolute;
+            left: 10px;
+            transition: transform 0.1s linear;
+            z-index: 10;
+            filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.5));
+        }
+
+        .racer-info {
+            position: absolute;
+            top: -15px;
+            left: 0;
+            background: rgba(0,0,0,0.7);
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        /* Commentary Overlay */
+        #commentary-box {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            background: rgba(0,0,0,0.8);
+            color: var(--accent);
+            padding: 10px;
+            text-align: center;
+            border-radius: 20px;
+            border: 2px solid var(--accent);
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        /* Effects */
+        .sleeping { filter: grayscale(100%); opacity: 0.7; }
+        .zooming { filter: drop-shadow(0 0 15px gold); transform: scale(1.2); }
+        
+        /* Modal */
+        #results-modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9);
+            z-index: 100;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background: var(--sidebar-bg);
+            padding: 40px;
+            border-radius: 10px;
+            border: 2px solid var(--accent);
+            max-width: 500px;
+            text-align: center;
+        }
+        
+        .win-text { color: var(--win-color); font-size: 1.5rem; margin-bottom: 10px; }
+        .lose-text { color: var(--lose-color); font-size: 1.5rem; margin-bottom: 10px; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>🐌 Slowest Race Ever 🐢</h1>
+        <div class="subtitle">Physics-based crawling chaos</div>
+    </header>
+
+    <div class="game-container">
+        <div class="track-area" id="track-area">
+            <div class="finish-line"></div>
+            <div class="lane" id="lane-0"></div>
+            <div class="lane" id="lane-1"></div>
+            <div class="lane" id="lane-2"></div>
+            <div class="lane" id="lane-3"></div>
+            <div id="commentary-box">Select a racer and place your bet!</div>
+        </div>
+
+        <div class="sidebar">
+            <div class="panel-box">
+                <div style="font-size: 0.8rem; text-transform: uppercase; color: #7f8c8d;">Your Wallet</div>
+                <div class="wallet-display" id="wallet-display">100 🥬</div>
+            </div>
+
+            <div class="panel-box" id="betting-controls">
+                <h3>Place Your Bet</h3>
+                <div class="bet-input-group">
+                    <label>Racer:</label>
+                    <select id="racer-select">
+                        <option value="">-- Inspect Lineup --</option>
+                    </select>
+                    
+                    <label>Wager (Leaves):</label>
+                    <input type="number" id="bet-amount" min="1" max="100" value="10">
+                    
+                    <button id="place-bet-btn" onclick="placeBet()">🔒 Lock In Bet</button>
+                </div>
+                <div id="bet-status" style="margin-top: 10px; font-size: 0.9rem; color: var(--accent); display: none;">
+                    Bet Locked: <span id="locked-amount">0</span> on <span id="locked-racer">---</span>
+                </div>
+            </div>
+
+            <div class="panel-box">
+                <h4>Race Odds</h4>
+                <div style="font-size: 0.8rem; color: #bdc3c7;">
+                    Current Mood affects speed!
+                    <br>Happy = Fast start
+                    <br>Lazy = Low accel
+                    <br>Existential = Random stops
+                </div>
+            </div>
+
+            <button id="start-race-btn" onclick="startRace()">🏁 START RACE</button>
+        </div>
+    </div>
+
+    <div id="results-modal">
+        <div class="modal-content">
+            <h2 id="winner-announce" style="color: var(--accent);">WINNER!</h2>
+            <div id="bet-result-msg"></div>
+            <br>
+            <div id="stats-display" style="text-align: left; font-size: 0.9rem; background: rgba(0,0,0,0.3); padding: 10px; margin-bottom: 20px;"></div>
+            <button onclick="resetGame()" style="width: 100%; background: var(--accent); color: #2c3e50;">NEXT RACE</button>
+        </div>
+    </div>
+
+<script>
+    // --- CONFIG ---
+    const NAMES = ["Gary", "Shelly", "Turbo", "Flash", "Sticky", "Lettuce", "Rocky", "Zoomer", "Dart", "Pokey"];
+    const MOODS = ["Happy", "Lazy", "Determined", "Existential", "Hyper", "Sleepy"];
+    const EMOJIS = ["🐌", "🐢", "🐌", "🐢"];
+    const TRACK_PADDING = 80;
+
+    // --- STATE ---
+    let wallet = 100;
+    let racers = [];
+    let currentBet = { racerIndex: null, amount: 0, active: false };
+    let raceInterval;
+    let raceActive = false;
+    let startTime;
+    let trackWidth = 0;
+
+    // --- INITIALIZATION ---
+    window.onload = function() {
+        trackWidth = document.getElementById('track-area').offsetWidth - TRACK_PADDING;
+        initRacers();
+        updateWalletUI();
+    };
+
+    class Racer {
+        constructor(laneIndex) {
+            this.id = laneIndex;
+            this.name = NAMES[Math.floor(Math.random() * NAMES.length)];
+            this.emoji = EMOJIS[laneIndex % EMOJIS.length];
+            this.laneId = `lane-${laneIndex}`;
+            
+            // Stats
+            this.pos = 0;
+            this.currentSpeed = 0;
+            this.mood = MOODS[Math.floor(Math.random() * MOODS.length)];
+            
+            // Randomize physics based on mood
+            this.maxSpeed = 0.3 + Math.random() * 0.4;
+            this.accel = 0.002 + Math.random() * 0.004;
+            this.sleepChance = 0.005;
+
+            // Mood Modifiers
+            if (this.mood === "Lazy") { this.accel *= 0.5; this.sleepChance *= 2; }
+            if (this.mood === "Hyper") { this.maxSpeed *= 1.5; this.sleepChance = 0.02; } // Fast but crashes
+            if (this.mood === "Determined") { this.sleepChance = 0; this.maxSpeed *= 0.9; }
+
+            // State
+            this.state = 'racing'; 
+            this.naps = 0;
+            this.zooms = 0;
+            
+            this.element = this.createDOM();
+        }
+
+        createDOM() {
+            const lane = document.getElementById(this.laneId);
+            lane.innerHTML = ''; // Clear old
+            const el = document.createElement('div');
+            el.className = 'racer';
+            el.innerHTML = `
+                ${this.emoji}
+                <div class="racer-info">${this.name} (${this.mood})</div>
+            `;
+            lane.appendChild(el);
+            return el;
+        }
+
+        update() {
+            if (!raceActive) return;
+
+            // Logic
+            if (this.state === 'racing') {
+                // Sleep Check
+                if (Math.random() < this.sleepChance) {
+                    this.enterSleep();
+                } 
+                // Zoom Check
+                else if (Math.random() < 0.003) {
+                    this.enterZoom();
+                }
+            }
+
+            // Physics
+            if (this.state === 'racing' || this.state === 'zoomed') {
+                if (this.currentSpeed < this.maxSpeed) this.currentSpeed += this.accel;
+                this.pos += this.currentSpeed;
+            }
+
+            // Render
+            this.element.style.transform = `translateX(${this.pos}px)`;
+            
+            // Win Check
+            if (this.pos >= trackWidth) {
+                endRace(this);
+            }
+        }
+
+        enterSleep() {
+            this.state = 'sleeping';
+            this.element.classList.add('sleeping');
+            this.naps++;
+            showEffect(this.element, "💤");
+            updateCommentary(`${this.name} is taking a nap!`);
+            
+            setTimeout(() => {
+                this.state = 'racing';
+                this.currentSpeed = 0; // Lost momentum
+                this.element.classList.remove('sleeping');
+            }, 2000 + Math.random() * 2000);
+        }
+
+        enterZoom() {
+            this.state = 'zoomed';
+            this.zooms++;
+            this.currentSpeed = this.maxSpeed * 3;
+            this.element.classList.add('zooming');
+            showEffect(this.element, "🔥");
+            updateCommentary(`Look at ${this.name} GO!!`);
+            
+            setTimeout(() => {
+                this.state = 'racing';
+                this.currentSpeed = this.maxSpeed;
+                this.element.classList.remove('zooming');
+            }, 1500);
+        }
+    }
+
+    // --- GAME FUNCTIONS ---
+
+    function initRacers() {
+        racers = [];
+        const select = document.getElementById('racer-select');
+        select.innerHTML = '<option value="">-- Select Winner --</option>';
+
+        for (let i = 0; i < 4; i++) {
+            let r = new Racer(i);
+            racers.push(r);
+            // Add to dropdown
+            let opt = document.createElement('option');
+            opt.value = i;
+            opt.text = `${r.name} (${r.mood})`;
+            select.appendChild(opt);
+        }
+    }
+
+    function updateWalletUI() {
+        document.getElementById('wallet-display').innerText = `${wallet} 🥬`;
+        const betInput = document.getElementById('bet-amount');
+        betInput.max = wallet;
+    }
+
+    function placeBet() {
+        const racerIndex = document.getElementById('racer-select').value;
+        const amount = parseInt(document.getElementById('bet-amount').value);
+
+        if (racerIndex === "" || isNaN(amount) || amount <= 0) {
+            alert("Please select a racer and enter a valid amount!");
+            return;
+        }
+        if (amount > wallet) {
+            alert("You don't have enough lettuce!");
+            return;
+        }
+
+        // Lock Bet
+        wallet -= amount;
+        currentBet = { racerIndex: parseInt(racerIndex), amount: amount, active: true };
+        updateWalletUI();
+
+        // UI Updates
+        document.getElementById('place-bet-btn').disabled = true;
+        document.getElementById('racer-select').disabled = true;
+        document.getElementById('bet-amount').disabled = true;
+        
+        document.getElementById('bet-status').style.display = 'block';
+        document.getElementById('locked-amount').innerText = `${amount} 🥬`;
+        document.getElementById('locked-racer').innerText = racers[racerIndex].name;
+
+        // Enable Start
+        const startBtn = document.getElementById('start-race-btn');
+        startBtn.classList.add('ready');
+        startBtn.disabled = false;
+        
+        updateCommentary("Bet locked! Ready to race.");
+    }
+
+    function startRace() {
+        if (!currentBet.active) {
+            alert("You must place a bet first!");
+            return;
+        }
+        
+        raceActive = true;
+        startTime = Date.now();
+        document.getElementById('start-race-btn').disabled = true;
+        document.getElementById('start-race-btn').classList.remove('ready');
+        updateCommentary("AND THEY'RE CRAWLING!");
+
+        raceInterval = setInterval(() => {
+            racers.forEach(r => r.update());
+        }, 16);
+    }
+
+    function endRace(winner) {
+        raceActive = false;
+        clearInterval(raceInterval);
+        
+        const modal = document.getElementById('results-modal');
+        const msgDiv = document.getElementById('bet-result-msg');
+        
+        // Calculate Winnings
+        let wonBet = false;
+        if (currentBet.active && winner.id === currentBet.racerIndex) {
+            const winnings = currentBet.amount * 3; // 3x payout!
+            wallet += winnings;
+            wonBet = true;
+            msgDiv.innerHTML = `<div class="win-text">YOU WON ${winnings} LEAVES!</div>`;
+        } else {
+            msgDiv.innerHTML = `<div class="lose-text">You lost your ${currentBet.amount} leaves...</div>`;
+        }
+
+        // Stats
+        document.getElementById('winner-announce').innerText = `🏆 ${winner.name} WINS!`;
+        document.getElementById('stats-display').innerHTML = `
+            Time: ${((Date.now() - startTime)/1000).toFixed(2)}s<br>
+            Winner Naps: ${winner.naps}<br>
+            Winner Zooms: ${winner.zooms}
+        `;
+
+        modal.style.display = 'flex';
+        updateWalletUI();
+        
+        // Bankruptcy check
+        if (wallet <= 0) {
+            setTimeout(() => { 
+                alert("You are out of lettuce! The Bank of Garden Pests grants you a loan of 10.");
+                wallet = 10;
+                updateWalletUI();
+            }, 1000);
+        }
+    }
+
+    function resetGame() {
+        document.getElementById('results-modal').style.display = 'none';
+        
+        // Reset UI
+        currentBet = { racerIndex: null, amount: 0, active: false };
+        document.getElementById('place-bet-btn').disabled = false;
+        document.getElementById('racer-select').disabled = false;
+        document.getElementById('bet-amount').disabled = false;
+        document.getElementById('bet-status').style.display = 'none';
+        
+        document.getElementById('start-race-btn').disabled = true; // Wait for bet
+        updateCommentary("New Racers approaching the line...");
+        
+        // Reset Racers
+        initRacers();
+    }
+
+    // Utility
+    function showEffect(el, text) {
+        const fx = document.createElement('div');
+        fx.style.position = 'absolute';
+        fx.style.top = '-20px';
+        fx.style.left = '10px';
+        fx.style.fontSize = '20px';
+        fx.style.animation = 'floatUp 1s forwards';
+        fx.innerText = text;
+        el.appendChild(fx);
+        setTimeout(() => fx.remove(), 1000);
+    }
+
+    function updateCommentary(text) {
+        document.getElementById('commentary-box').innerText = text;
+    }
+
+    // CSS Injection for animation
+    const style = document.createElement('style');
+    style.innerHTML = `
+        @keyframes floatUp { to { transform: translateY(-30px); opacity: 0; } }
+    `;
+    document.head.appendChild(style);
+
+</script>
+</body>
+</html>
